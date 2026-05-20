@@ -1,0 +1,18 @@
+services:
+  kanban-board:
+    build: .
+    container_name: kanban-board
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persistent storage for your task database tasks.json
+      # Option A: Named docker volume (Simple & Recommended)
+      - kanban-data:/data
+      
+      # Option B: Local folder mount (Useful for easy backups on home servers)
+      # Uncomment the line below and comment Option A to use local folder mount:
+      # - ./data:/data
+
+volumes:
+  kanban-data:
