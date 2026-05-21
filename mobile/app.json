@@ -15,14 +15,19 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.kanbanflow.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0b0f19"
-      },
-      "package": "com.kanbanflow.app"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "dd33961c-ac3d-475e-bb7a-5a3b3b9305d9"
+      }
     }
   }
 }
