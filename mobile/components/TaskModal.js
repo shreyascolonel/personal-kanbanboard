@@ -28,6 +28,13 @@ export default function TaskModal({ isOpen, onClose, onSave, task, currentUser, 
   const [attachments, setAttachments] = useState([]);
   const [uploading, setUploading] = useState(false);
 
+  // Productivity states
+  const [tags, setTags] = useState([]);
+  const [newTagText, setNewTagText] = useState('');
+  const [estimatedHours, setEstimatedHours] = useState('0');
+  const [actualHours, setActualHours] = useState('0');
+  const [reminderThreshold, setReminderThreshold] = useState('24h');
+
   // 1. Set form values ONLY when modal opens to prevent clobbering typed inputs
   useEffect(() => {
     if (isOpen) {
@@ -36,6 +43,13 @@ export default function TaskModal({ isOpen, onClose, onSave, task, currentUser, 
       setStatus(task?.status || 'todo');
       setPriority(task?.priority || 'low');
       setDueDate(task?.dueDate || '');
+      
+      // Load productivity states
+      setTags(task?.tags || []);
+      setNewTagText('');
+      setEstimatedHours(task?.estimatedHours !== undefined ? String(task.estimatedHours) : '0');
+      setActualHours(task?.actualHours !== undefined ? String(task.actualHours) : '0');
+      setReminderThreshold(task?.reminderThreshold || '24h');
     }
   }, [isOpen]);
 
@@ -64,6 +78,13 @@ export default function TaskModal({ isOpen, onClose, onSave, task, currentUser, 
       subtasks,
       comments,
       attachments: task ? task.attachments : [],
+      
+      // Productivity fields
+      tags,
+      estimatedHours: parseFloat(estimatedHours) || 0,
+      actualHours: parseFloat(actualHours) || 0,
+      reminderThreshold,
+      
       ...extendedFields
     };
   };
@@ -76,6 +97,22 @@ export default function TaskModal({ isOpen, onClose, onSave, task, currentUser, 
 
     onSave(getUpdatedTaskData());
     onClose();
+  };
+
+  // Tag Handlers
+  const handleAddTag = () => {
+    const trimmed = newTagText.trim();
+    if (!trimmed) return;
+    if (tags.includes(trimmed)) {
+      setNewTagText('');
+      return;
+    }
+    setTags([...tags, trimmed]);
+    setNewTagText('');
+  };
+
+  const handleRemoveTag = (tagToRemove) => {
+    setTags(tags.filter(t => t !== tagToRemove));
   };
 
   // Subtask Handlers
@@ -363,6 +400,112 @@ export default function TaskModal({ isOpen, onClose, onSave, task, currentUser, 
                 autoCapitalize="none"
                 autoCorrect={false}
               />
+            </View>
+
+            {/* Tags Section */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Tags</Text>
+              
+              {/* Add Tag Row */}
+              <View style={styles.tagAddRow}>
+                <TextInput
+                  style={[styles.input, styles.tagInput]}
+                  placeholder="New tag..."
+                  placeholderTextColor="#6b7280"
+                  value={newTagText}
+                  onChangeText={setNewTagText}
+                  onSubmitEditing={handleAddTag}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity style={styles.addTagBtn} onPress={handleAddTag}>
+                  <Text style={styles.addTagBtnText}>Add</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Tag Pills List */}
+              {tags.length > 0 ? (
+                <View style={styles.tagListContainer}>
+                  {tags.map((tag) => {
+                    let charSum = 0;
+                    for (let c = 0; c < tag.length; c++) charSum += tag.charCodeAt(c);
+                    const colorIndex = charSum % 6;
+
+                    return (
+                      <View key={tag} style={[styles.modalTagPill, styles[`tagColor${colorIndex}`]]}>
+                        <Text style={styles.modalTagText}>{tag}</Text>
+                        <TouchableOpacity style={styles.removeTagBtn} onPress={() => handleRemoveTag(tag)}>
+                          <Text style={styles.removeTagText}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : (
+                <Text style={styles.emptyText}>No tags added yet.</Text>
+              )}
+            </View>
+
+            {/* Time Tracking Section */}
+            <View style={styles.timeTrackingRow}>
+              <View style={[styles.formGroup, { flex: 1 }]}>
+                <Text style={styles.label}>Estimated Hours</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. 5"
+                  placeholderTextColor="#6b7280"
+                  keyboardType="numeric"
+                  value={estimatedHours}
+                  onChangeText={setEstimatedHours}
+                />
+              </View>
+              
+              <View style={[styles.formGroup, { flex: 1 }]}>
+                <Text style={styles.label}>Actual Hours</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. 3"
+                  placeholderTextColor="#6b7280"
+                  keyboardType="numeric"
+                  value={actualHours}
+                  onChangeText={setActualHours}
+                />
+              </View>
+            </View>
+
+            {/* Customizable Alarm Thresholds */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Deadline Reminder Alarm</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.thresholdScrollContent}
+              >
+                {[
+                  { value: 'none', label: 'None' },
+                  { value: '0', label: 'At Due Time' },
+                  { value: '1h', label: '1h Before' },
+                  { value: '2h', label: '2h Before' },
+                  { value: '24h', label: '24h Before' },
+                  { value: '48h', label: '48h Before' },
+                ].map((opt) => (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[
+                      styles.thresholdChip,
+                      reminderThreshold === opt.value && styles.thresholdChipActive
+                    ]}
+                    onPress={() => setReminderThreshold(opt.value)}
+                  >
+                    <Text style={[
+                      styles.thresholdChipText,
+                      reminderThreshold === opt.value && styles.thresholdChipTextActive
+                    ]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
 
             {/* Extended Sections - Only visible when EDITING an existing task */}
@@ -871,4 +1014,93 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
   },
+  thresholdScrollContent: {
+    alignItems: 'center',
+    gap: 6,
+    paddingRight: 10,
+  },
+  thresholdChip: {
+    backgroundColor: '#1f2937',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  thresholdChipActive: {
+    borderColor: '#6366f1',
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+  },
+  thresholdChipText: {
+    color: '#9ca3af',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  thresholdChipTextActive: {
+    color: '#ffffff',
+  },
+  tagAddRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  tagInput: {
+    flex: 1,
+    paddingVertical: 6,
+    fontSize: 14,
+  },
+  addTagBtn: {
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addTagBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  tagListContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  modalTagPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    gap: 4,
+  },
+  modalTagText: {
+    color: '#f9fafb',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  removeTagBtn: {
+    padding: 2,
+    marginLeft: 2,
+  },
+  removeTagText: {
+    color: '#9ca3af',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  timeTrackingRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  tagColor0: { backgroundColor: 'rgba(59, 130, 246, 0.15)', borderColor: 'rgba(59, 130, 246, 0.3)' },
+  tagColor1: { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: 'rgba(16, 185, 129, 0.3)' },
+  tagColor2: { backgroundColor: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(245, 158, 11, 0.3)' },
+  tagColor3: { backgroundColor: 'rgba(139, 92, 246, 0.15)', borderColor: 'rgba(139, 92, 246, 0.3)' },
+  tagColor4: { backgroundColor: 'rgba(236, 72, 153, 0.15)', borderColor: 'rgba(236, 72, 153, 0.3)' },
+  tagColor5: { backgroundColor: 'rgba(20, 184, 166, 0.15)', borderColor: 'rgba(20, 184, 166, 0.3)' },
 });

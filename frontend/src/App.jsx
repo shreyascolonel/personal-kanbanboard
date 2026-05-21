@@ -3,6 +3,7 @@ import KanbanBoard from './components/KanbanBoard';
 import TaskModal from './components/TaskModal';
 import Login from './components/Login';
 import AdminPanel from './components/AdminPanel';
+import { playNotificationSound, playSuccessSound } from './utils/audio';
 
 export default function App() {
   // Authentication & Session States
@@ -29,6 +30,12 @@ export default function App() {
 
   // Notification Center States
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [dismissedTaskIds, setDismissedTaskIds] = useState([]);
+
+  // Command Palette States
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [commandPaletteSearch, setCommandPaletteSearch] = useState('');
+  const [activeCommandIndex, setActiveCommandIndex] = useState(0);
 
   // Request browser notification permissions
   useEffect(() => {
@@ -48,12 +55,13 @@ export default function App() {
 
     return tasks.filter(t => {
       if (t.status === 'done' || !t.dueDate) return false;
+      if (dismissedTaskIds.includes(t.id)) return false;
       return t.dueDate <= tomorrowStr; // due today, tomorrow, or overdue
     });
   };
 
   const triggerBrowserNotifications = (loadedTasks) => {
-    if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') return;
+    if (typeof window === 'undefined') return;
 
     const todayStr = new Date().toISOString().split('T')[0];
     const tomorrow = new Date();
@@ -66,17 +74,22 @@ export default function App() {
     });
 
     if (dueSoonTasks.length > 0) {
-      const title = `KanbanFlow - Tasks Due Soon! ⏰`;
-      const body = dueSoonTasks.map(t => `• ${t.title} (${t.dueDate})`).join('\n');
-      
-      try {
-        new Notification(title, {
-          body,
-          icon: '/favicon.ico',
-          tag: 'kanban-due-soon'
-        });
-      } catch (err) {
-        console.warn('Could not launch browser notification:', err);
+      // Play crisp browser synthesized chime sound!
+      playNotificationSound();
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const title = `KanbanFlow - Tasks Due Soon! ⏰`;
+        const body = dueSoonTasks.map(t => `• ${t.title} (${t.dueDate})`).join('\n');
+        
+        try {
+          new Notification(title, {
+            body,
+            icon: '/favicon.ico',
+            tag: 'kanban-due-soon'
+          });
+        } catch (err) {
+          console.warn('Could not launch browser notification:', err);
+        }
       }
     }
   };
@@ -91,6 +104,57 @@ export default function App() {
   useEffect(() => {
     validateSession();
   }, [token]);
+
+  // Hash-based Deep Linking listener
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      if (hash.startsWith('#task-')) {
+        const taskId = hash.replace('#task-', '');
+        const foundTask = tasks.find(t => t.id === taskId);
+        if (foundTask) {
+          setEditingTask(foundTask);
+          setIsModalOpen(true);
+        }
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    
+    // Auto-open modal on first loads when tasks list populates
+    if (tasks.length > 0) {
+      handleHashChange();
+    }
+
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, [tasks]);
+
+  // Global Command Palette KeyDown Listeners
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      const isEditingText = 
+        document.activeElement.tagName === 'INPUT' || 
+        document.activeElement.tagName === 'TEXTAREA' ||
+        document.activeElement.isContentEditable;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen(prev => !prev);
+        setCommandPaletteSearch('');
+        setActiveCommandIndex(0);
+      } else if (e.key === '/' && !isEditingText) {
+        e.preventDefault();
+        setIsCommandPaletteOpen(true);
+        setCommandPaletteSearch('');
+        setActiveCommandIndex(0);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [theme, user, tasks]);
 
   const validateSession = async () => {
     if (!token) {
@@ -194,6 +258,13 @@ export default function App() {
     const url = isEdit ? `/api/tasks/${taskData.id}` : '/api/tasks';
     const method = isEdit ? 'PUT' : 'POST';
 
+    // Sound effect trigger on transitioning to Done
+    const oldTask = tasks.find(t => t.id === taskData.id);
+    const oldStatus = oldTask ? oldTask.status : null;
+    if (taskData.status === 'done' && oldStatus !== 'done') {
+      playSuccessSound();
+    }
+
     // Optimistic UI updates
     const tempId = 'temp-' + Date.now();
     let oldTasks = [...tasks];
@@ -265,9 +336,16 @@ export default function App() {
   };
 
   const handleMoveTask = async (taskId, newStatus) => {
+    const oldTask = tasks.find(t => t.id === taskId);
+    const oldStatus = oldTask ? oldTask.status : null;
+
     const oldTasks = [...tasks];
     // Optimistic update
     setTasks(tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+
+    if (newStatus === 'done' && oldStatus !== 'done') {
+      playSuccessSound();
+    }
 
     try {
       const response = await fetch(`/api/tasks/${taskId}`, {
@@ -300,24 +378,89 @@ export default function App() {
   const openAddTaskModal = () => {
     setEditingTask(null);
     setIsModalOpen(true);
+    // Remove hash
+    window.history.pushState("", document.title, window.location.pathname + window.location.search);
   };
 
   const openEditTaskModal = (task) => {
     setEditingTask(task);
     setIsModalOpen(true);
+    window.location.hash = `task-${task.id}`;
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingTask(null);
+    // Remove hash cleanly
+    window.history.pushState("", document.title, window.location.pathname + window.location.search);
   };
 
   // Searching & Filtering
   const filteredTasks = tasks.filter((task) => {
     const matchesSearch = 
       task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (task.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+      (task.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (task.tags || []).some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
     
     const matchesPriority = 
       priorityFilter === 'all' || task.priority === priorityFilter;
 
     return matchesSearch && matchesPriority;
   });
+
+  // Command Palette Items Resolver
+  const getCommandPaletteItems = () => {
+    const query = commandPaletteSearch.toLowerCase().trim();
+    
+    const actions = [
+      { id: 'add-task', label: 'Add New Task', desc: 'Create a new task card on the board', shortcut: 'N', icon: '➕', action: () => { openAddTaskModal(); setIsCommandPaletteOpen(false); } },
+      { id: 'toggle-theme', label: 'Toggle Theme', desc: `Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`, shortcut: 'T', icon: '🌗', action: () => { toggleTheme(); setIsCommandPaletteOpen(false); } },
+      { id: 'view-board', label: 'Go to Kanban Board', desc: 'View the task board columns', shortcut: 'B', icon: '📋', action: () => { setCurrentView('board'); setIsCommandPaletteOpen(false); } },
+      ...(user?.isAdmin ? [{ id: 'view-admin', label: 'Go to Admin Panel', desc: 'Manage system settings and users', shortcut: 'A', icon: '⚙️', action: () => { setCurrentView('admin'); setIsCommandPaletteOpen(false); } }] : []),
+      { id: 'filter-all', label: 'Filter: All Priorities', desc: 'Clear priority filters', shortcut: 'P0', icon: '🔍', action: () => { setPriorityFilter('all'); setIsCommandPaletteOpen(false); } },
+      { id: 'filter-high', label: 'Filter: High Priority', desc: 'Show only high priority tasks', shortcut: 'P1', icon: '🔴', action: () => { setPriorityFilter('high'); setIsCommandPaletteOpen(false); } },
+      { id: 'filter-medium', label: 'Filter: Medium Priority', desc: 'Show only medium priority tasks', shortcut: 'P2', icon: '🟡', action: () => { setPriorityFilter('medium'); setIsCommandPaletteOpen(false); } },
+      { id: 'filter-low', label: 'Filter: Low Priority', desc: 'Show only low priority tasks', shortcut: 'P3', icon: '🟢', action: () => { setPriorityFilter('low'); setIsCommandPaletteOpen(false); } },
+      { id: 'logout', label: 'Sign Out / Logout', desc: 'Terminate current board session', shortcut: 'Q', icon: '👋', action: () => { handleLogout(); setIsCommandPaletteOpen(false); } }
+    ];
+
+    const filteredActions = actions.filter(act => 
+      act.label.toLowerCase().includes(query) || 
+      act.desc.toLowerCase().includes(query)
+    );
+
+    // List tasks
+    const matchedTasks = tasks.map(t => ({
+      id: `task-${t.id}`,
+      label: t.title,
+      desc: `Open task in status "${t.status}"`,
+      icon: '📝',
+      action: () => { openEditTaskModal(t); setIsCommandPaletteOpen(false); }
+    })).filter(t => t.label.toLowerCase().includes(query));
+
+    return [...filteredActions, ...matchedTasks];
+  };
+
+  const handlePaletteKeyDown = (e) => {
+    const items = getCommandPaletteItems();
+    if (items.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveCommandIndex(prev => (prev + 1) % items.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveCommandIndex(prev => (prev - 1 + items.length) % items.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (items[activeCommandIndex]) {
+        items[activeCommandIndex].action();
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsCommandPaletteOpen(false);
+    }
+  };
 
   // Loading Indicator for Session Check
   if (authChecking) {
@@ -381,25 +524,38 @@ export default function App() {
                         <span className="notifications-empty-text">No urgent deadlines!</span>
                       </div>
                     ) : (
-                      getApproachingTasks().map(t => {
-                        const todayStr = new Date().toISOString().split('T')[0];
-                        const isOverdue = t.dueDate < todayStr;
-                        return (
-                          <div 
-                            key={t.id} 
-                            className={`notification-tray-item ${isOverdue ? 'overdue' : 'approaching'}`}
+                      <>
+                        {getApproachingTasks().map(t => {
+                          const todayStr = new Date().toISOString().split('T')[0];
+                          const isOverdue = t.dueDate < todayStr;
+                          return (
+                            <div 
+                              key={t.id} 
+                              className={`notification-tray-item ${isOverdue ? 'overdue' : 'approaching'}`}
+                              onClick={() => {
+                                openEditTaskModal(t);
+                                setIsNotificationsOpen(false);
+                              }}
+                            >
+                              <span className="notification-tray-task-title">{t.title}</span>
+                              <span className="notification-tray-desc">
+                                {isOverdue ? `Overdue (${t.dueDate})` : `Due Soon (${t.dueDate})`}
+                              </span>
+                            </div>
+                          );
+                        })}
+                        <div className="notifications-tray-footer">
+                          <button 
+                            className="btn btn-small btn-text"
                             onClick={() => {
-                              openEditTaskModal(t);
-                              setIsNotificationsOpen(false);
+                              const ids = getApproachingTasks().map(t => t.id);
+                              setDismissedTaskIds(prev => [...prev, ...ids]);
                             }}
                           >
-                            <span className="notification-tray-task-title">{t.title}</span>
-                            <span className="notification-tray-desc">
-                              {isOverdue ? `Overdue (${t.dueDate})` : `Due Soon (${t.dueDate})`}
-                            </span>
-                          </div>
-                        );
-                      })
+                            Dismiss All
+                          </button>
+                        </div>
+                      </>
                     )}
                   </div>
                 </div>
@@ -484,7 +640,7 @@ export default function App() {
               <input
                 type="text"
                 className="search-input"
-                placeholder="Search your tasks..."
+                placeholder="Search your tasks... (Press '/' to search everything)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -539,12 +695,82 @@ export default function App() {
           {/* Create/Edit Modal Dialog */}
           <TaskModal
             isOpen={isModalOpen}
-            onClose={() => setIsModalOpen(false)}
+            onClose={handleCloseModal}
             onSave={handleSaveTask}
             task={editingTask}
             currentUser={user}
           />
         </>
+      )}
+
+      {/* COMMAND PALETTE MODAL (Ctrl + K / '/') */}
+      {isCommandPaletteOpen && (
+        <div className="command-palette-overlay" onClick={() => setIsCommandPaletteOpen(false)}>
+          <div 
+            className="command-palette-content" 
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={handlePaletteKeyDown}
+          >
+            <div className="command-palette-search-wrapper">
+              <span className="command-palette-search-icon">🔍</span>
+              <input
+                type="text"
+                className="command-palette-search"
+                placeholder="Type a command or search for tasks..."
+                value={commandPaletteSearch}
+                onChange={(e) => {
+                  setCommandPaletteSearch(e.target.value);
+                  setActiveCommandIndex(0);
+                }}
+                autoFocus
+              />
+              <span className="command-palette-item-shortcut" style={{ fontSize: '0.65rem' }}>ESC</span>
+            </div>
+
+            <div className="command-palette-body">
+              {getCommandPaletteItems().length === 0 ? (
+                <div className="command-palette-empty">
+                  No matching commands or tasks found
+                </div>
+              ) : (
+                <div className="command-palette-section">
+                  <div className="command-palette-section-title">
+                    {commandPaletteSearch.trim() ? 'Search Results' : 'Quick Actions & Commands'}
+                  </div>
+                  <div className="command-palette-list">
+                    {getCommandPaletteItems().map((item, idx) => (
+                      <button
+                        key={item.id}
+                        className={`command-palette-item ${idx === activeCommandIndex ? 'active' : ''}`}
+                        onClick={item.action}
+                        onMouseEnter={() => setActiveCommandIndex(idx)}
+                      >
+                        <div className="command-palette-item-left">
+                          <span className="command-palette-item-icon">{item.icon}</span>
+                          <span className="command-palette-item-label">{item.label}</span>
+                          {item.desc && (
+                            <span className="command-palette-item-desc">— {item.desc}</span>
+                          )}
+                        </div>
+                        {item.shortcut && (
+                          <span className="command-palette-item-shortcut">{item.shortcut}</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="command-palette-footer">
+              <div className="command-palette-shortcuts">
+                <span><kbd>↑↓</kbd> Navigate</span>
+                <span><kbd>↵</kbd> Select</span>
+              </div>
+              <div>Press <kbd>Ctrl</kbd> + <kbd>K</kbd> to toggle</div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

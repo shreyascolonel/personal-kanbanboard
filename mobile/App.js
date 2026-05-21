@@ -80,15 +80,36 @@ export default function App() {
         const due = new Date(task.dueDate + 'T09:00:00'); // 9 AM local time on due date
         if (isNaN(due.getTime())) continue;
 
-        // 24 hours before due date
-        const notifyTime = new Date(due.getTime() - 24 * 60 * 60 * 1000);
+        const threshold = task.reminderThreshold || '24h';
+        if (threshold === 'none') continue;
+
+        let offsetMs = 0;
+        let label = 'now';
+        if (threshold === '1h') {
+          offsetMs = 1 * 60 * 60 * 1000;
+          label = 'in 1 hour';
+        } else if (threshold === '2h') {
+          offsetMs = 2 * 60 * 60 * 1000;
+          label = 'in 2 hours';
+        } else if (threshold === '24h') {
+          offsetMs = 24 * 60 * 60 * 1000;
+          label = 'tomorrow at 9:00 AM';
+        } else if (threshold === '48h') {
+          offsetMs = 48 * 60 * 60 * 1000;
+          label = 'in 2 days';
+        } else if (threshold === '0') {
+          offsetMs = 0;
+          label = 'now';
+        }
+
+        const notifyTime = new Date(due.getTime() - offsetMs);
         const now = new Date();
 
         if (notifyTime > now) {
           await Notifications.scheduleNotificationAsync({
             content: {
               title: `Task Deadline Approaching! ⏳`,
-              body: `"${task.title}" is due tomorrow at 9:00 AM.`,
+              body: `"${task.title}" is due ${label}.`,
               data: { taskId: task.id },
             },
             trigger: notifyTime,
@@ -183,7 +204,11 @@ export default function App() {
                   description: item.data.description,
                   status: item.data.status,
                   priority: item.data.priority,
-                  dueDate: item.data.dueDate
+                  dueDate: item.data.dueDate,
+                  tags: item.data.tags,
+                  estimatedHours: item.data.estimatedHours,
+                  actualHours: item.data.actualHours,
+                  reminderThreshold: item.data.reminderThreshold
                 })
               });
 

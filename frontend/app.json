@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "8d7227b0-7586-48d6-ae53-4ed671ebff0a"
+      }
+    },
+    "android": {
+      "package": "com.shreyas666.kanbanfrontend"
+    }
+  }
+}

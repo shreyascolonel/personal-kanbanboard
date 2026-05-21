@@ -76,6 +76,22 @@ export default function TaskCard({ task, onEdit, onDelete, onMoveTask }) {
 
   return (
     <TouchableOpacity style={[styles.card, cardBorderStyle]} onPress={() => onEdit(task)}>
+      {/* Dynamic Tag Pills Row */}
+      {task.tags && Array.isArray(task.tags) && task.tags.length > 0 ? (
+        <View style={styles.cardTagsContainer}>
+          {task.tags.map((tag) => {
+            let charSum = 0;
+            for (let c = 0; c < tag.length; c++) charSum += tag.charCodeAt(c);
+            const colorIndex = charSum % 6;
+            return (
+              <View key={tag} style={[styles.cardTagPill, styles[`tagColor${colorIndex}`]]}>
+                <Text style={styles.cardTagText}>{tag}</Text>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
+
       {/* Title & Delete Header */}
       <View style={styles.headerRow}>
         <Text style={styles.title} numberOfLines={2}>{task.title}</Text>
@@ -127,6 +143,15 @@ export default function TaskCard({ task, onEdit, onDelete, onMoveTask }) {
         {attachmentsCount > 0 ? (
           <View style={styles.indicatorBadge}>
             <Text style={styles.indicatorBadgeText}>📎 {attachmentsCount}</Text>
+          </View>
+        ) : null}
+
+        {/* Stopwatch hour badge */}
+        {(task.actualHours > 0 || task.estimatedHours > 0) ? (
+          <View style={styles.indicatorBadge}>
+            <Text style={styles.indicatorBadgeText}>
+              ⏱️ {task.actualHours || 0}h / {task.estimatedHours || 0}h
+            </Text>
           </View>
         ) : null}
 
@@ -299,4 +324,27 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#9ca3af',
   },
+  cardTagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginBottom: 6,
+  },
+  cardTagPill: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  cardTagText: {
+    color: '#f9fafb',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  tagColor0: { backgroundColor: 'rgba(59, 130, 246, 0.15)', borderColor: 'rgba(59, 130, 246, 0.3)' },
+  tagColor1: { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: 'rgba(16, 185, 129, 0.3)' },
+  tagColor2: { backgroundColor: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(245, 158, 11, 0.3)' },
+  tagColor3: { backgroundColor: 'rgba(139, 92, 246, 0.15)', borderColor: 'rgba(139, 92, 246, 0.3)' },
+  tagColor4: { backgroundColor: 'rgba(236, 72, 153, 0.15)', borderColor: 'rgba(236, 72, 153, 0.3)' },
+  tagColor5: { backgroundColor: 'rgba(20, 184, 166, 0.15)', borderColor: 'rgba(20, 184, 166, 0.3)' },
 });

@@ -24,9 +24,30 @@ export default function TaskCard({ task, onEdit, onDelete, onMoveTask, onDragSta
     }
   };
 
+  // Quick hash function to resolve consistent tag color modulo 6
+  const getTagColorClass = (tag) => {
+    let hash = 0;
+    for (let i = 0; i < tag.length; i++) {
+      hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const colorIndex = Math.abs(hash) % 6;
+    return `tag-pill-color-${colorIndex}`;
+  };
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  
+  const isOverdue = task.status !== 'done' && task.dueDate && task.dueDate < todayStr;
+  const isApproaching = task.status !== 'done' && task.dueDate && task.dueDate === tomorrowStr;
+
+  const glowClass = isOverdue ? 'overdue-glow' : isApproaching ? 'approaching-glow' : '';
+  const priorityClass = `priority-${task.priority}`;
+
   return (
     <div
-      className="task-card"
+      className={`task-card ${priorityClass} ${glowClass}`}
       draggable
       onDragStart={(e) => onDragStart(e, task.id)}
       onDragEnd={onDragEnd}
@@ -46,6 +67,17 @@ export default function TaskCard({ task, onEdit, onDelete, onMoveTask, onDragSta
           </svg>
         </button>
       </div>
+
+      {/* Task Tag Pills */}
+      {task.tags && task.tags.length > 0 && (
+        <div className="card-tags-row">
+          {task.tags.map((tag, idx) => (
+            <span key={idx} className={`tag-pill tag-pill-card ${getTagColorClass(tag)}`}>
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
 
       {task.description && (
         <div className="card-description">{task.description}</div>
@@ -76,10 +108,6 @@ export default function TaskCard({ task, onEdit, onDelete, onMoveTask, onDragSta
         </span>
 
         {task.dueDate && (() => {
-          const todayStr = new Date().toISOString().split('T')[0];
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          const tomorrowStr = tomorrow.toISOString().split('T')[0];
           const isUrgent = task.status !== 'done' && task.dueDate <= tomorrowStr;
           const warningClass = isUrgent ? 'deadline-warning' : '';
 
@@ -97,8 +125,11 @@ export default function TaskCard({ task, onEdit, onDelete, onMoveTask, onDragSta
         })()}
       </div>
 
-      {/* Meta Badge counters for Comments and Attachments */}
-      {((task.comments && task.comments.length > 0) || (task.attachments && task.attachments.length > 0)) && (
+      {/* Meta Badge counters for Comments, Attachments, and Stopwatch Time Tracking */}
+      {((task.comments && task.comments.length > 0) || 
+        (task.attachments && task.attachments.length > 0) || 
+        (task.estimatedHours > 0) || 
+        (task.actualHours > 0)) && (
         <div className="card-badges-row">
           {task.comments && task.comments.length > 0 && (
             <span className="card-badge" title={`${task.comments.length} comment(s)`}>
@@ -108,6 +139,11 @@ export default function TaskCard({ task, onEdit, onDelete, onMoveTask, onDragSta
           {task.attachments && task.attachments.length > 0 && (
             <span className="card-badge" title={`${task.attachments.length} attachment(s)`}>
               📎 {task.attachments.length}
+            </span>
+          )}
+          {((task.estimatedHours > 0) || (task.actualHours > 0)) && (
+            <span className="card-badge card-badge-stopwatch" title={`Time tracked: ${task.actualHours}h actual / ${task.estimatedHours}h estimated`}>
+              ⏱️ {task.actualHours || 0}h / {task.estimatedHours || 0}h
             </span>
           )}
         </div>

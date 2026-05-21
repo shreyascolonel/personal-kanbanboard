@@ -1403,3 +1403,325 @@ a {
   font-size: 0.8rem;
   font-weight: 500;
 }
+
+/* ==========================================
+   COMMAND PALETTE STYLING (Ctrl + K)
+   ========================================== */
+.command-palette-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(7, 10, 18, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 99999;
+  padding-top: 15vh;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.command-palette-content {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  width: 100%;
+  max-width: 580px;
+  box-shadow: var(--shadow-xl), 0 0 40px rgba(99, 102, 241, 0.15);
+  animation: slideUp 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 3px solid var(--accent-color);
+}
+
+.command-palette-search-wrapper {
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  gap: 0.75rem;
+}
+
+.command-palette-search-icon {
+  font-size: 1.25rem;
+  color: var(--text-secondary);
+}
+
+.command-palette-search {
+  width: 100%;
+  border: none;
+  background: none;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.command-palette-search::placeholder {
+  color: var(--text-tertiary);
+}
+
+.command-palette-body {
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.command-palette-section {
+  padding: 0.5rem 0;
+}
+
+.command-palette-section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding: 0.5rem 1.25rem 0.25rem;
+  letter-spacing: 0.05em;
+}
+
+.command-palette-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.command-palette-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  cursor: pointer;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  transition: all 0.15s ease;
+  font-size: 0.9rem;
+}
+
+.command-palette-item-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.command-palette-item-icon {
+  font-size: 1.1rem;
+  width: 1.5rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.command-palette-item-label {
+  color: var(--text-primary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-palette-item-desc {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-palette-item-shortcut {
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--border-radius-sm);
+  font-family: monospace;
+}
+
+.command-palette-item.active {
+  background-color: rgba(99, 102, 241, 0.08);
+  border-left: 3px solid var(--accent-color);
+  padding-left: calc(1.25rem - 3px);
+}
+
+.command-palette-item.active .command-palette-item-label {
+  color: var(--accent-color);
+}
+
+.command-palette-empty {
+  padding: 2.5rem 1.25rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.command-palette-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--bg-tertiary);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.command-palette-shortcuts {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.command-palette-shortcuts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.command-palette-shortcuts kbd {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  padding: 0.05rem 0.25rem;
+  font-family: monospace;
+}
+
+/* ==========================================
+   PRODUCTIVITY TASK TAGS PILLS
+   ========================================== */
+.task-tags-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.tags-list-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--border-radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+/* Custom Colored Tag Pills */
+.tag-pill-color-0 { background-color: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.25); color: #818cf8; }
+.tag-pill-color-1 { background-color: rgba(236, 72, 153, 0.1); border-color: rgba(236, 72, 153, 0.25); color: #f472b6; }
+.tag-pill-color-2 { background-color: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.25); color: #34d399; }
+.tag-pill-color-3 { background-color: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.25); color: #fbbf24; }
+.tag-pill-color-4 { background-color: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.25); color: #60a5fa; }
+.tag-pill-color-5 { background-color: rgba(168, 85, 247, 0.1); border-color: rgba(168, 85, 247, 0.25); color: #c084fc; }
+
+.btn-delete-tag {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 0 0.15rem;
+  line-height: 1;
+}
+
+.btn-delete-tag:hover {
+  color: var(--priority-high-text);
+}
+
+.tag-editor-input-wrapper {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.card-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.25rem;
+}
+
+.tag-pill-card {
+  padding: 0.1rem 0.4rem;
+  font-size: 0.68rem;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ==========================================
+   TIME TRACKING (Estimated vs. Actual Hours)
+   ========================================== */
+.time-tracking-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.time-tracking-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.card-badge-stopwatch {
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+/* ==========================================
+   NOTIFICATIONS TRAY EXTENSION
+   ========================================== */
+.notifications-tray-footer {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border-color);
+  padding-top: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.btn-small {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  border-radius: var(--border-radius-sm);
+}
+
+/* Priority Card Border Glow Highlights */
+.task-card.priority-high {
+  border-left: 3px solid var(--priority-high-text);
+}
+.task-card.priority-medium {
+  border-left: 3px solid var(--priority-medium-text);
+}
+.task-card.priority-low {
+  border-left: 3px solid var(--priority-low-text);
+}
+.task-card.overdue-glow {
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.task-card.approaching-glow {
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+

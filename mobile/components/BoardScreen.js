@@ -5,7 +5,9 @@ import {
   Text, 
   TouchableOpacity, 
   FlatList, 
-  ActivityIndicator
+  ActivityIndicator,
+  TextInput,
+  ScrollView
 } from 'react-native';
 
 // Components
@@ -24,11 +26,39 @@ export default function BoardScreen({
   onLogout
 }) {
   const [activeTab, setActiveTab] = useState('todo'); // 'todo', 'in-progress', 'done'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTag, setSelectedTag] = useState(null);
 
-  // Filter lists
-  const todoTasks = tasks.filter(t => t.status === 'todo');
-  const inProgressTasks = tasks.filter(t => t.status === 'in-progress');
-  const doneTasks = tasks.filter(t => t.status === 'done');
+  // Extract all unique tags present in the tasks list
+  const allTags = Array.from(
+    new Set(
+      tasks.reduce((acc, t) => {
+        if (t.tags && Array.isArray(t.tags)) {
+          t.tags.forEach(tag => {
+            if (tag && tag.trim()) acc.push(tag.trim());
+          });
+        }
+        return acc;
+      }, [])
+    )
+  );
+
+  // Apply search query and tag filters
+  const filteredTasks = tasks.filter(task => {
+    const matchesSearch = searchQuery.trim() === '' || 
+      (task.title && task.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (task.description && task.description.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const matchesTag = !selectedTag || 
+      (task.tags && Array.isArray(task.tags) && task.tags.includes(selectedTag));
+
+    return matchesSearch && matchesTag;
+  });
+
+  // Filter lists based on the filtered set
+  const todoTasks = filteredTasks.filter(t => t.status === 'todo');
+  const inProgressTasks = filteredTasks.filter(t => t.status === 'in-progress');
+  const doneTasks = filteredTasks.filter(t => t.status === 'done');
 
   const getActiveTasksList = () => {
     switch (activeTab) {
@@ -83,6 +113,77 @@ export default function BoardScreen({
             <Text style={styles.logoutBtnText}>👋 Exit</Text>
           </TouchableOpacity>
         </View>
+      </View>
+
+      {/* Search & Tag Filters Container */}
+      <View style={styles.filterSection}>
+        <View style={styles.searchBarContainer}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search tasks..."
+            placeholderTextColor="#6b7280"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            clearButtonMode="while-editing"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearBtn}>
+              <Text style={styles.clearIcon}>✕</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        {allTags.length > 0 && (
+          <View style={styles.tagsContainer}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.tagsScrollContent}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.tagChip,
+                  !selectedTag && styles.tagChipActive
+                ]}
+                onPress={() => setSelectedTag(null)}
+              >
+                <Text style={[
+                  styles.tagChipText,
+                  !selectedTag && styles.tagChipTextActive
+                ]}>All</Text>
+              </TouchableOpacity>
+
+              {allTags.map((tag) => {
+                const isActive = selectedTag === tag;
+                let charSum = 0;
+                for (let c = 0; c < tag.length; c++) charSum += tag.charCodeAt(c);
+                const tagColorIndex = charSum % 6;
+
+                return (
+                  <TouchableOpacity
+                    key={tag}
+                    style={[
+                      styles.tagChip,
+                      isActive && styles.tagChipActive,
+                      isActive && styles[`tagChipActiveColor${tagColorIndex}`]
+                    ]}
+                    onPress={() => setSelectedTag(isActive ? null : tag)}
+                  >
+                    <Text style={[
+                      styles.tagChipText,
+                      isActive && styles.tagChipTextActive
+                    ]}>
+                      🏷️ {tag}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
       </View>
 
       {/* Tabs */}
@@ -304,4 +405,78 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     lineHeight: Platform => Platform.OS === 'ios' ? 28 : 32, // slight offset check
   },
+  filterSection: {
+    backgroundColor: '#111827',
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1f2937',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    height: 38,
+    marginBottom: 8,
+  },
+  searchIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#f9fafb',
+    fontSize: 14,
+    paddingVertical: 0,
+  },
+  clearBtn: {
+    padding: 4,
+  },
+  clearIcon: {
+    color: '#9ca3af',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  tagsContainer: {
+    height: 32,
+    justifyContent: 'center',
+  },
+  tagsScrollContent: {
+    alignItems: 'center',
+    gap: 6,
+    paddingRight: 10,
+  },
+  tagChip: {
+    backgroundColor: '#1f2937',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    height: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tagChipActive: {
+    borderColor: '#6366f1',
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+  },
+  tagChipText: {
+    color: '#9ca3af',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  tagChipTextActive: {
+    color: '#ffffff',
+  },
+  tagChipActiveColor0: { backgroundColor: 'rgba(59, 130, 246, 0.25)', borderColor: '#3b82f6' },
+  tagChipActiveColor1: { backgroundColor: 'rgba(16, 185, 129, 0.25)', borderColor: '#10b981' },
+  tagChipActiveColor2: { backgroundColor: 'rgba(245, 158, 11, 0.25)', borderColor: '#f59e0b' },
+  tagChipActiveColor3: { backgroundColor: 'rgba(139, 92, 246, 0.25)', borderColor: '#8b5cf6' },
+  tagChipActiveColor4: { backgroundColor: 'rgba(236, 72, 153, 0.25)', borderColor: '#ec4899' },
+  tagChipActiveColor5: { backgroundColor: 'rgba(20, 184, 166, 0.25)', borderColor: '#14b8a6' },
 });

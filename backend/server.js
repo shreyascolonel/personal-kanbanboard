@@ -225,13 +225,17 @@ app.get('/api/tasks', authenticateToken, (req, res) => {
     ...t,
     subtasks: t.subtasks || [],
     comments: t.comments || [],
-    attachments: t.attachments || []
+    attachments: t.attachments || [],
+    tags: t.tags || [],
+    estimatedHours: t.estimatedHours || 0,
+    actualHours: t.actualHours || 0,
+    reminderThreshold: t.reminderThreshold || '24h'
   }));
   res.json(sanitized);
 });
 
 app.post('/api/tasks', authenticateToken, (req, res) => {
-  const { title, description, status, priority, dueDate, subtasks, comments } = req.body;
+  const { title, description, status, priority, dueDate, subtasks, comments, tags, estimatedHours, actualHours, reminderThreshold } = req.body;
   
   if (!title) {
     return res.status(400).json({ error: 'Task title is required' });
@@ -249,6 +253,10 @@ app.post('/api/tasks', authenticateToken, (req, res) => {
     subtasks: subtasks || [],
     comments: comments || [],
     attachments: [],
+    tags: tags || [],
+    estimatedHours: estimatedHours || 0,
+    actualHours: actualHours || 0,
+    reminderThreshold: reminderThreshold || '24h',
     createdAt: new Date().toISOString()
   };
 
@@ -264,7 +272,7 @@ app.post('/api/tasks', authenticateToken, (req, res) => {
 
 app.put('/api/tasks/:id', authenticateToken, (req, res) => {
   const taskId = req.params.id;
-  const { title, description, status, priority, dueDate, subtasks, comments } = req.body;
+  const { title, description, status, priority, dueDate, subtasks, comments, tags, estimatedHours, actualHours, reminderThreshold } = req.body;
 
   const tasks = readTasks();
   const taskIndex = tasks.findIndex(t => t.id === taskId);
@@ -286,6 +294,10 @@ app.put('/api/tasks/:id', authenticateToken, (req, res) => {
   if (dueDate !== undefined) tasks[taskIndex].dueDate = dueDate;
   if (subtasks !== undefined) tasks[taskIndex].subtasks = subtasks;
   if (comments !== undefined) tasks[taskIndex].comments = comments;
+  if (tags !== undefined) tasks[taskIndex].tags = tags;
+  if (estimatedHours !== undefined) tasks[taskIndex].estimatedHours = estimatedHours;
+  if (actualHours !== undefined) tasks[taskIndex].actualHours = actualHours;
+  if (reminderThreshold !== undefined) tasks[taskIndex].reminderThreshold = reminderThreshold;
 
   const success = writeTasks(tasks);
   if (success) {
@@ -293,7 +305,11 @@ app.put('/api/tasks/:id', authenticateToken, (req, res) => {
       ...tasks[taskIndex],
       subtasks: tasks[taskIndex].subtasks || [],
       comments: tasks[taskIndex].comments || [],
-      attachments: tasks[taskIndex].attachments || []
+      attachments: tasks[taskIndex].attachments || [],
+      tags: tasks[taskIndex].tags || [],
+      estimatedHours: tasks[taskIndex].estimatedHours || 0,
+      actualHours: tasks[taskIndex].actualHours || 0,
+      reminderThreshold: tasks[taskIndex].reminderThreshold || '24h'
     };
     res.json(updated);
   } else {

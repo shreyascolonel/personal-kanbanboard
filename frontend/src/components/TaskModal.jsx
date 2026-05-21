@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { playSuccessSound } from '../utils/audio';
 
 export default function TaskModal({ isOpen, onClose, onSave, task, currentUser }) {
   const [title, setTitle] = useState('');
@@ -17,6 +18,14 @@ export default function TaskModal({ isOpen, onClose, onSave, task, currentUser }
   const [attachments, setAttachments] = useState([]);
   const [uploading, setUploading] = useState(false);
 
+  // New Productivity Suite states
+  const [tags, setTags] = useState([]);
+  const [newTag, setNewTag] = useState('');
+  const [estimatedHours, setEstimatedHours] = useState('');
+  const [actualHours, setActualHours] = useState('');
+  const [reminderThreshold, setReminderThreshold] = useState('24h');
+  const [copiedLink, setCopiedLink] = useState(false);
+
   useEffect(() => {
     if (task) {
       setTitle(task.title || '');
@@ -24,6 +33,10 @@ export default function TaskModal({ isOpen, onClose, onSave, task, currentUser }
       setStatus(task.status || 'todo');
       setPriority(task.priority || 'low');
       setDueDate(task.dueDate || '');
+      setTags(task.tags || []);
+      setEstimatedHours(task.estimatedHours !== undefined ? task.estimatedHours : '');
+      setActualHours(task.actualHours !== undefined ? task.actualHours : '');
+      setReminderThreshold(task.reminderThreshold || '24h');
       setSubtasks(task.subtasks || []);
       setComments(task.comments || []);
       setAttachments(task.attachments || []);
@@ -33,6 +46,10 @@ export default function TaskModal({ isOpen, onClose, onSave, task, currentUser }
       setStatus('todo');
       setPriority('low');
       setDueDate('');
+      setTags([]);
+      setEstimatedHours('');
+      setActualHours('');
+      setReminderThreshold('24h');
       setSubtasks([]);
       setComments([]);
       setAttachments([]);
@@ -40,9 +57,26 @@ export default function TaskModal({ isOpen, onClose, onSave, task, currentUser }
     setError('');
     setNewSubtaskTitle('');
     setNewCommentText('');
+    setNewTag('');
+    setCopiedLink(false);
   }, [task, isOpen]);
 
   if (!isOpen) return null;
+
+  // Package current user input fields to avoid state lagging during quick checklists/tags save
+  const getCurrentFields = () => {
+    return {
+      title: title.trim(),
+      description: description.trim(),
+      status,
+      priority,
+      dueDate,
+      tags,
+      estimatedHours: Number(estimatedHours) || 0,
+      actualHours: Number(actualHours) || 0,
+      reminderThreshold,
+    };
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -53,11 +87,7 @@ export default function TaskModal({ isOpen, onClose, onSave, task, currentUser }
     
     onSave({
       id: task ? task.id : undefined,
-      title: title.trim(),
-      description: description.trim(),
-      status,
-      priority,
-      dueDate,
+      ...getCurrentFields(),
       subtasks,
       comments,
       attachments: task ? task.attachments : [],
@@ -81,10 +111,10 @@ export default function TaskModal({ isOpen, onClose, onSave, task, currentUser }
     setSubtasks(updated);
     setNewSubtaskTitle('');
 
-    // Instant persistence for smooth UX
     if (task) {
       onSave({
         ...task,
+        ...getCurrentFields(),
         subtasks: updated
       });
     }
@@ -95,9 +125,17 @@ export default function TaskModal({ isOpen, onClose, onSave, task, currentUser }
       s.id === subId ? { ...s, isCompleted: !s.isCompleted } : s
     );
     setSubtasks(updated);
+
+    // Celebration arpeggio sound effect if all checklist subtasks are fully completed!
+    const allDone = updated.length > 0 && updated.every(s => s.isCompleted);
+    if (allDone) {
+      playSuccessSound();
+    }
+
     if (task) {
       onSave({
         ...task,
+        ...getCurrentFields(),
         subtasks: updated
       });
     }
@@ -109,9 +147,67 @@ export default function TaskModal({ isOpen, onClose, onSave, task, currentUser }
     if (task) {
       onSave({
         ...task,
+        ...getCurrentFields(),
         subtasks: updated
       });
     }
+  };
+
+  // Tag Handlers
+  const handleAddTag = () => {
+    const cleaned = newTag.trim();
+    if (!cleaned) return;
+    if (tags.includes(cleaned)) {
+      setNewTag('');
+      return;
+    }
+    const updated = [...tags, cleaned];
+    setTags(updated);
+    setNewTag('');
+
+    if (task) {
+      onSave({
+        ...task,
+        ...getCurrentFields(),
+        tags: updated
+      });
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove) => {
+    const updated = tags.filter(t => t !== tagToRemove);
+    setTags(updated);
+
+    if (task) {
+      onSave({
+        ...task,
+        ...getCurrentFields(),
+        tags: updated
+      });
+    }
+  };
+
+  // Quick hash function to resolve consistent tag color modulo 6
+  const getTagColorClass = (tag) => {
+    let hash = 0;
+    for (let i = 0; i < tag.length; i++) {
+      hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const colorIndex = Math.abs(hash) % 6;
+    return `tag-pill-color-${colorIndex}`;
+  };
+
+  const handleCopyLink = () => {
+    if (!task) return;
+    const deepLink = `${window.location.origin}${window.location.pathname}#task-${task.id}`;
+    navigator.clipboard.writeText(deepLink)
+      .then(() => {
+        setCopiedLink(true);
+        setTimeout(() => setCopiedLink(false), 2000);
+      })
+      .catch((err) => {
+        console.error('Failed to copy link:', err);
+      });
   };
 
   // Comment Handlers
@@ -134,6 +230,7 @@ export default function TaskModal({ isOpen, onClose, onSave, task, currentUser }
     if (task) {
       onSave({
         ...task,
+        ...getCurrentFields(),
         comments: updated
       });
     }
@@ -225,7 +322,20 @@ export default function TaskModal({ isOpen, onClose, onSave, task, currentUser }
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" style={{ maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">{task ? 'Edit Task' : 'Add New Task'}</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <h2 className="modal-title">{task ? 'Edit Task' : 'Add New Task'}</h2>
+            {task && (
+              <button
+                type="button"
+                className="btn btn-small"
+                style={{ padding: '0.2rem 0.5rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', backgroundColor: 'rgba(99,102,241,0.08)', color: 'var(--accent-color)', border: '1px solid rgba(99,102,241,0.2)' }}
+                onClick={handleCopyLink}
+                title="Copy deep link to clipboard"
+              >
+                🔗 {copiedLink ? 'Copied!' : 'Copy Link'}
+              </button>
+            )}
+          </div>
           <button className="btn btn-text btn-icon" onClick={onClose} aria-label="Close modal">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -304,11 +414,107 @@ export default function TaskModal({ isOpen, onClose, onSave, task, currentUser }
             />
           </div>
 
+          {/* Productivity Tag Pill List Editor */}
+          <div className="form-group" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+            <label>Tags</label>
+            <div className="tags-list-editor">
+              {tags.length === 0 ? (
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>No tags added.</span>
+              ) : (
+                tags.map((tag, idx) => (
+                  <span key={idx} className={`tag-pill ${getTagColorClass(tag)}`}>
+                    {tag}
+                    <button
+                      type="button"
+                      className="btn-delete-tag"
+                      onClick={() => handleRemoveTag(tag)}
+                      title="Remove tag"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
+            <div className="tag-editor-input-wrapper">
+              <input
+                type="text"
+                className="form-input"
+                style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem' }}
+                placeholder="Type tag and press Enter or click Add"
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddTag();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}
+                onClick={handleAddTag}
+              >
+                Add
+              </button>
+            </div>
+          </div>
+
+          {/* Time Tracking (Estimated vs. Actual hours) */}
+          <div className="form-row" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+            <div className="form-group">
+              <label htmlFor="task-estimated">Estimated Hours</label>
+              <input
+                id="task-estimated"
+                type="number"
+                min="0"
+                step="0.5"
+                className="form-input"
+                placeholder="e.g. 5"
+                value={estimatedHours}
+                onChange={(e) => setEstimatedHours(e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="task-actual">Actual Hours</label>
+              <input
+                id="task-actual"
+                type="number"
+                min="0"
+                step="0.5"
+                className="form-input"
+                placeholder="e.g. 3.5"
+                value={actualHours}
+                onChange={(e) => setActualHours(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Custom Reminder Threshold Alerts */}
+          <div className="form-group">
+            <label htmlFor="task-reminder">Smart Alert Threshold</label>
+            <select
+              id="task-reminder"
+              className="form-input select-input"
+              value={reminderThreshold}
+              onChange={(e) => setReminderThreshold(e.target.value)}
+            >
+              <option value="none">No Alert</option>
+              <option value="0">At due time</option>
+              <option value="1h">1 hour before</option>
+              <option value="2h">2 hours before</option>
+              <option value="24h">24 hours before</option>
+              <option value="48h">48 hours before</option>
+            </select>
+          </div>
+
           {/* Extended Sections - Only visible when EDITING an existing task */}
           {task ? (
             <>
               {/* SUBTASKS SECTION */}
-              <div className="subtasks-section">
+              <div className="subtasks-section" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
                 <label className="form-group" style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Subtasks Checklist</label>
                 <div className="subtask-list">
                   {subtasks.length === 0 ? (
