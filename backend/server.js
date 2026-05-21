@@ -5,6 +5,7 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const multer = require('multer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,6 +18,15 @@ const DATA_DIR = fs.existsSync('/data') ? '/data' : __dirname;
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const TASKS_FILE = path.join(DATA_DIR, 'tasks.json');
 const SECRET_FILE = path.join(DATA_DIR, 'jwt.secret');
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+
+// Ensure uploads directory exists
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+// Serve attachments statically
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Load or generate persistent JWT Secret
 let JWT_SECRET = process.env.JWT_SECRET;
@@ -211,11 +221,17 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
 app.get('/api/tasks', authenticateToken, (req, res) => {
   const tasks = readTasks();
   const userTasks = tasks.filter(t => t.userId === req.user.id);
-  res.json(userTasks);
+  const sanitized = userTasks.map(t => ({
+    ...t,
+    subtasks: t.subtasks || [],
+    comments: t.comments || [],
+    attachments: t.attachments || []
+  }));
+  res.json(sanitized);
 });
 
 app.post('/api/tasks', authenticateToken, (req, res) => {
-  const { title, description, status, priority, dueDate } = req.body;
+  const { title, description, status, priority, dueDate, subtasks, comments } = req.body;
   
   if (!title) {
     return res.status(400).json({ error: 'Task title is required' });
@@ -230,6 +246,9 @@ app.post('/api/tasks', authenticateToken, (req, res) => {
     status: status || 'todo',
     priority: priority || 'low',
     dueDate: dueDate || '',
+    subtasks: subtasks || [],
+    comments: comments || [],
+    attachments: [],
     createdAt: new Date().toISOString()
   };
 
@@ -245,7 +264,7 @@ app.post('/api/tasks', authenticateToken, (req, res) => {
 
 app.put('/api/tasks/:id', authenticateToken, (req, res) => {
   const taskId = req.params.id;
-  const { title, description, status, priority, dueDate } = req.body;
+  const { title, description, status, priority, dueDate, subtasks, comments } = req.body;
 
   const tasks = readTasks();
   const taskIndex = tasks.findIndex(t => t.id === taskId);
@@ -265,12 +284,140 @@ app.put('/api/tasks/:id', authenticateToken, (req, res) => {
   if (status !== undefined) tasks[taskIndex].status = status;
   if (priority !== undefined) tasks[taskIndex].priority = priority;
   if (dueDate !== undefined) tasks[taskIndex].dueDate = dueDate;
+  if (subtasks !== undefined) tasks[taskIndex].subtasks = subtasks;
+  if (comments !== undefined) tasks[taskIndex].comments = comments;
 
   const success = writeTasks(tasks);
   if (success) {
-    res.json(tasks[taskIndex]);
+    const updated = {
+      ...tasks[taskIndex],
+      subtasks: tasks[taskIndex].subtasks || [],
+      comments: tasks[taskIndex].comments || [],
+      attachments: tasks[taskIndex].attachments || []
+    };
+    res.json(updated);
   } else {
     res.status(500).json({ error: 'Failed to update task' });
+  }
+});
+
+// Multer Disk Storage Configuration
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, UPLOADS_DIR);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname);
+  }
+});
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
+
+// Attachment Upload Route
+app.post('/api/tasks/:id/attachments', authenticateToken, upload.single('file'), (req, res) => {
+  const taskId = req.params.id;
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  const tasks = readTasks();
+  const taskIndex = tasks.findIndex(t => t.id === taskId);
+
+  if (taskIndex === -1) {
+    try { fs.unlinkSync(req.file.path); } catch (e) {}
+    return res.status(404).json({ error: 'Task not found' });
+  }
+
+  // Security Scoping
+  if (tasks[taskIndex].userId !== req.user.id) {
+    try { fs.unlinkSync(req.file.path); } catch (e) {}
+    return res.status(403).json({ error: 'Unauthorized to add attachments to this task' });
+  }
+
+  // Ensure attachments array exists
+  if (!tasks[taskIndex].attachments) {
+    tasks[taskIndex].attachments = [];
+  }
+
+  const newAttachment = {
+    id: 'attach-' + crypto.randomBytes(6).toString('hex'),
+    filename: req.file.filename,
+    originalName: req.file.originalname,
+    mimeType: req.file.mimetype,
+    size: req.file.size,
+    uploadedAt: new Date().toISOString()
+  };
+
+  tasks[taskIndex].attachments.push(newAttachment);
+  const success = writeTasks(tasks);
+
+  if (success) {
+    const updated = {
+      ...tasks[taskIndex],
+      subtasks: tasks[taskIndex].subtasks || [],
+      comments: tasks[taskIndex].comments || [],
+      attachments: tasks[taskIndex].attachments || []
+    };
+    res.status(201).json(updated);
+  } else {
+    try { fs.unlinkSync(req.file.path); } catch (e) {}
+    res.status(500).json({ error: 'Failed to save attachment metadata' });
+  }
+});
+
+// Attachment Delete Route
+app.delete('/api/tasks/:id/attachments/:attachmentId', authenticateToken, (req, res) => {
+  const taskId = req.params.id;
+  const attachmentId = req.params.attachmentId;
+
+  const tasks = readTasks();
+  const taskIndex = tasks.findIndex(t => t.id === taskId);
+
+  if (taskIndex === -1) {
+    return res.status(404).json({ error: 'Task not found' });
+  }
+
+  // Security Scoping
+  if (tasks[taskIndex].userId !== req.user.id) {
+    return res.status(403).json({ error: 'Unauthorized to delete attachments from this task' });
+  }
+
+  const attachments = tasks[taskIndex].attachments || [];
+  const attachIndex = attachments.findIndex(a => a.id === attachmentId);
+
+  if (attachIndex === -1) {
+    return res.status(404).json({ error: 'Attachment not found' });
+  }
+
+  const attachment = attachments[attachIndex];
+  
+  attachments.splice(attachIndex, 1);
+  tasks[taskIndex].attachments = attachments;
+  
+  const success = writeTasks(tasks);
+
+  if (success) {
+    const filePath = path.join(UPLOADS_DIR, attachment.filename);
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (err) {
+      console.error('Failed to delete attachment file from filesystem:', err);
+    }
+
+    const updated = {
+      ...tasks[taskIndex],
+      subtasks: tasks[taskIndex].subtasks || [],
+      comments: tasks[taskIndex].comments || [],
+      attachments: tasks[taskIndex].attachments || []
+    };
+    res.json(updated);
+  } else {
+    res.status(500).json({ error: 'Failed to delete attachment metadata' });
   }
 });
 

@@ -10,6 +10,16 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
+import * as Notifications from 'expo-notifications';
+
+// Configure expo-notifications to handle alerts
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 // Components
 import LoginScreen from './components/LoginScreen';
@@ -39,7 +49,61 @@ export default function App() {
   // ----------------------------------------------------
   useEffect(() => {
     loadLocalSession();
+    requestNotificationPermissions();
   }, []);
+
+  const requestNotificationPermissions = async () => {
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') {
+        console.log('Local notifications permission denied');
+      }
+    } catch (e) {
+      console.warn('Error checking/requesting notifications permission:', e);
+    }
+  };
+
+  const scheduleTaskNotifications = async (tasksList) => {
+    try {
+      // 1. Cancel all scheduled notifications to avoid duplicates/orphans
+      await Notifications.cancelAllScheduledNotificationsAsync();
+
+      // 2. Loop and schedule for each active task with a due date
+      for (const task of tasksList) {
+        if (task.status === 'done' || !task.dueDate) continue;
+
+        const due = new Date(task.dueDate + 'T09:00:00'); // 9 AM local time on due date
+        if (isNaN(due.getTime())) continue;
+
+        // 24 hours before due date
+        const notifyTime = new Date(due.getTime() - 24 * 60 * 60 * 1000);
+        const now = new Date();
+
+        if (notifyTime > now) {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `Task Deadline Approaching! ⏳`,
+              body: `"${task.title}" is due tomorrow at 9:00 AM.`,
+              data: { taskId: task.id },
+            },
+            trigger: notifyTime,
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to schedule local notifications:', err);
+    }
+  };
+
+  // Synchronise notifications whenever tasks change
+  useEffect(() => {
+    scheduleTaskNotifications(tasks);
+  }, [tasks]);
 
   const loadLocalSession = async () => {
     try {
@@ -470,6 +534,9 @@ export default function App() {
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveTask}
         task={editingTask}
+        currentUser={user}
+        token={token}
+        serverUrl={serverUrl}
       />
     </SafeAreaView>
   );

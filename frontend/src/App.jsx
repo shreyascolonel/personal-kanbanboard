@@ -27,6 +27,60 @@ export default function App() {
   // Theme State
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
 
+  // Notification Center States
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+
+  // Request browser notification permissions
+  useEffect(() => {
+    if (token && typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+  }, [token]);
+
+  // Notification Helpers
+  const getApproachingTasks = () => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+    return tasks.filter(t => {
+      if (t.status === 'done' || !t.dueDate) return false;
+      return t.dueDate <= tomorrowStr; // due today, tomorrow, or overdue
+    });
+  };
+
+  const triggerBrowserNotifications = (loadedTasks) => {
+    if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') return;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+    const dueSoonTasks = loadedTasks.filter(t => {
+      if (t.status === 'done' || !t.dueDate) return false;
+      return t.dueDate === todayStr || t.dueDate === tomorrowStr;
+    });
+
+    if (dueSoonTasks.length > 0) {
+      const title = `KanbanFlow - Tasks Due Soon! ⏰`;
+      const body = dueSoonTasks.map(t => `• ${t.title} (${t.dueDate})`).join('\n');
+      
+      try {
+        new Notification(title, {
+          body,
+          icon: '/favicon.ico',
+          tag: 'kanban-due-soon'
+        });
+      } catch (err) {
+        console.warn('Could not launch browser notification:', err);
+      }
+    }
+  };
+
   // Theme Sync Effect
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -86,6 +140,7 @@ export default function App() {
       }
       const data = await response.json();
       setTasks(data);
+      triggerBrowserNotifications(data);
     } catch (err) {
       console.error(err.message);
     } finally {
@@ -293,6 +348,65 @@ export default function App() {
           <h1 className="logo-text">KanbanFlow</h1>
         </div>
         <div className="header-actions">
+          {/* In-App Notification Center */}
+          {currentView === 'board' && (
+            <div className="notifications-wrapper">
+              <button 
+                className="btn btn-icon btn-text notification-bell-btn"
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                title="View Notifications"
+                aria-label="View Notifications"
+              >
+                🔔
+                {getApproachingTasks().length > 0 && <span className="notification-badge-dot"></span>}
+              </button>
+
+              {isNotificationsOpen && (
+                <div className="notifications-tray" onClick={(e) => e.stopPropagation()}>
+                  <div className="notifications-tray-header">
+                    <span className="notifications-tray-title">Notifications Center</span>
+                    <button 
+                      className="btn btn-text btn-icon" 
+                      style={{ padding: '0.2rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      onClick={() => setIsNotificationsOpen(false)}
+                      title="Close Notifications"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="notifications-tray-list">
+                    {getApproachingTasks().length === 0 ? (
+                      <div className="notifications-empty-state">
+                        <span className="notifications-empty-icon">🎉</span>
+                        <span className="notifications-empty-text">No urgent deadlines!</span>
+                      </div>
+                    ) : (
+                      getApproachingTasks().map(t => {
+                        const todayStr = new Date().toISOString().split('T')[0];
+                        const isOverdue = t.dueDate < todayStr;
+                        return (
+                          <div 
+                            key={t.id} 
+                            className={`notification-tray-item ${isOverdue ? 'overdue' : 'approaching'}`}
+                            onClick={() => {
+                              openEditTaskModal(t);
+                              setIsNotificationsOpen(false);
+                            }}
+                          >
+                            <span className="notification-tray-task-title">{t.title}</span>
+                            <span className="notification-tray-desc">
+                              {isOverdue ? `Overdue (${t.dueDate})` : `Due Soon (${t.dueDate})`}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Theme Toggle */}
           <button 
             className="btn btn-icon btn-text"
@@ -428,6 +542,7 @@ export default function App() {
             onClose={() => setIsModalOpen(false)}
             onSave={handleSaveTask}
             task={editingTask}
+            currentUser={user}
           />
         </>
       )}

@@ -51,23 +51,67 @@ export default function TaskCard({ task, onEdit, onDelete, onMoveTask, onDragSta
         <div className="card-description">{task.description}</div>
       )}
 
+      {/* Subtasks Progress Bar */}
+      {task.subtasks && task.subtasks.length > 0 && (() => {
+        const subtasks = task.subtasks || [];
+        const completed = subtasks.filter(s => s.isCompleted).length;
+        const total = subtasks.length;
+        const pct = Math.round((completed / total) * 100);
+        return (
+          <div className="card-progress-container">
+            <div className="card-progress-text">
+              <span>Subtasks</span>
+              <span>{completed}/{total} ({pct}%)</span>
+            </div>
+            <div className="card-progress-bar-bg">
+              <div className="card-progress-bar-fill" style={{ width: `${pct}%` }}></div>
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="card-meta-row">
         <span className={`badge badge-${task.priority}`}>
           {task.priority}
         </span>
 
-        {task.dueDate && (
-          <span className="card-due-date">
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="8" y1="2" x2="8" y2="6"></line>
-              <line x1="3" y1="10" x2="21" y2="10"></line>
-            </svg>
-            {formatDueDate(task.dueDate)}
-          </span>
-        )}
+        {task.dueDate && (() => {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const tomorrowStr = tomorrow.toISOString().split('T')[0];
+          const isUrgent = task.status !== 'done' && task.dueDate <= tomorrowStr;
+          const warningClass = isUrgent ? 'deadline-warning' : '';
+
+          return (
+            <span className={`card-due-date ${warningClass}`} title={isUrgent ? 'Approaching Deadline or Overdue!' : ''}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+              {formatDueDate(task.dueDate)}
+            </span>
+          );
+        })()}
       </div>
+
+      {/* Meta Badge counters for Comments and Attachments */}
+      {((task.comments && task.comments.length > 0) || (task.attachments && task.attachments.length > 0)) && (
+        <div className="card-badges-row">
+          {task.comments && task.comments.length > 0 && (
+            <span className="card-badge" title={`${task.comments.length} comment(s)`}>
+              💬 {task.comments.length}
+            </span>
+          )}
+          {task.attachments && task.attachments.length > 0 && (
+            <span className="card-badge" title={`${task.attachments.length} attachment(s)`}>
+              📎 {task.attachments.length}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Quick Move / Touch Buttons for Mobile & Tablet friendliness */}
       <div className="card-touch-controls">

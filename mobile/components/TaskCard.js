@@ -42,10 +42,40 @@ export default function TaskCard({ task, onEdit, onDelete, onMoveTask }) {
     );
   };
 
+  const subtasksCount = task.subtasks ? task.subtasks.length : 0;
+  const completedSubtasksCount = task.subtasks ? task.subtasks.filter(s => s.isCompleted).length : 0;
+  const progressPercent = subtasksCount > 0 ? (completedSubtasksCount / subtasksCount) * 100 : 0;
+  const commentsCount = task.comments ? task.comments.length : 0;
+  const attachmentsCount = task.attachments ? task.attachments.length : 0;
+
   const isLocalOnly = task.id.startsWith('local-');
 
+  const getCardBorderStyle = () => {
+    if (!task.dueDate || task.status === 'done') return {};
+
+    try {
+      const due = new Date(task.dueDate + 'T23:59:59'); // end of due day
+      const now = new Date();
+
+      if (due < now) {
+        return { borderColor: 'rgba(239, 68, 68, 0.4)', borderWidth: 1.5 };
+      }
+
+      // Check if approaching (within next 24 hours)
+      const diffMs = due.getTime() - now.getTime();
+      const diffHrs = diffMs / (1000 * 60 * 60);
+
+      if (diffHrs >= 0 && diffHrs <= 24) {
+        return { borderColor: 'rgba(245, 158, 11, 0.4)', borderWidth: 1.5 };
+      }
+    } catch (e) {}
+    return {};
+  };
+
+  const cardBorderStyle = getCardBorderStyle();
+
   return (
-    <TouchableOpacity style={styles.card} onPress={() => onEdit(task)}>
+    <TouchableOpacity style={[styles.card, cardBorderStyle]} onPress={() => onEdit(task)}>
       {/* Title & Delete Header */}
       <View style={styles.headerRow}>
         <Text style={styles.title} numberOfLines={2}>{task.title}</Text>
@@ -59,6 +89,13 @@ export default function TaskCard({ task, onEdit, onDelete, onMoveTask }) {
         <Text style={styles.description} numberOfLines={3}>{task.description}</Text>
       ) : null}
 
+      {/* Checklist Progress Bar */}
+      {subtasksCount > 0 ? (
+        <View style={styles.progressContainer}>
+          <View style={[styles.progressBar, { width: `${progressPercent}%` }]} />
+        </View>
+      ) : null}
+
       {/* Metadata Row */}
       <View style={styles.metaRow}>
         <View style={[styles.badge, { backgroundColor: priorityStyle.bg }]}>
@@ -69,6 +106,27 @@ export default function TaskCard({ task, onEdit, onDelete, onMoveTask }) {
           <View style={styles.dueDateRow}>
             <Text style={styles.dueDateIcon}>📅</Text>
             <Text style={styles.dueDateText}>{formatDueDate(task.dueDate)}</Text>
+          </View>
+        ) : null}
+
+        {/* Subtask progress count badge */}
+        {subtasksCount > 0 ? (
+          <View style={styles.indicatorBadge}>
+            <Text style={styles.indicatorBadgeText}>☑️ {completedSubtasksCount}/{subtasksCount}</Text>
+          </View>
+        ) : null}
+
+        {/* Comments count badge */}
+        {commentsCount > 0 ? (
+          <View style={styles.indicatorBadge}>
+            <Text style={styles.indicatorBadgeText}>💬 {commentsCount}</Text>
+          </View>
+        ) : null}
+
+        {/* Attachments count badge */}
+        {attachmentsCount > 0 ? (
+          <View style={styles.indicatorBadge}>
+            <Text style={styles.indicatorBadgeText}>📎 {attachmentsCount}</Text>
           </View>
         ) : null}
 
@@ -212,5 +270,33 @@ const styles = StyleSheet.create({
   },
   controlBtnTextNext: {
     color: '#6366f1',
+  },
+  progressContainer: {
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#6366f1',
+    borderRadius: 2,
+  },
+  indicatorBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  indicatorBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#9ca3af',
   },
 });
